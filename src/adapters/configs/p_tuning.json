@@ -1,0 +1,6 @@
+{
+  "num_virtual_tokens": 8,
+  "encoder_reparameterization_type": "MLP",
+  "encoder_hidden_size": 128,
+  "encoder_num_layers": 2
+}

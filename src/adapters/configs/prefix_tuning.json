@@ -1,0 +1,5 @@
+{
+  "num_virtual_tokens": 8,
+  "encoder_hidden_size": 128,
+  "prefix_projection": false
+}
