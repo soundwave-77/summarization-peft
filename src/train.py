@@ -5,7 +5,6 @@ import evaluate
 import numpy as np
 
 from datasets import load_dataset
-from dotenv import load_dotenv
 from transformers import AutoTokenizer
 from trl import SFTConfig, SFTTrainer
 
@@ -16,8 +15,6 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 if __name__ == "__main__":
-    load_dotenv()
-
     logger.info("### LOAD CONFIGS...")
     
     train_config = load_config("src/configs/train_config.json")

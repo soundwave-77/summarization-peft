@@ -13,7 +13,7 @@
     "save_strategy": "epoch",
     "load_best_model_at_end": true,
     "push_to_hub": false,
-    "report_to": ["wandb"],
+    "report_to": ["clearml"],
     "metric_for_best_model": "rougeL",
     "greater_is_better": true,
     "save_only_model": true,
