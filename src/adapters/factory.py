@@ -45,7 +45,7 @@ class AdapterFactory:
 
         self.adapter_params = self._validate_config(adapter_config, params_class)
         
-        return config_class(**adapter_config)
+        return config_class(**self.adapter_params.model_dump())
 
     def _load_config(self, adapter_name: str) -> dict:
         adapter_config_path = os.path.join(
