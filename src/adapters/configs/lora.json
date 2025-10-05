@@ -1,0 +1,7 @@
+{
+  "r": 8,
+  "lora_alpha": 8,
+  "lora_dropout": 0.1,
+  "use_dora": false,
+  "target_modules": null
+}

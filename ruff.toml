@@ -1,0 +1,16 @@
+# Глобальные настройки
+line-length = 120
+
+# Настройки линтера
+[lint]
+select = [
+    "E",  # Pycodestyle (включает E501 - длина строки)
+    "F",  # Pyflakes (включает F401 - неиспользуемые импорты)
+    "I",  # isort (сортировка импортов)
+]
+
+# Настройки сортировки импортов
+[lint.isort]
+combine-as-imports = true
+lines-between-types = 1
+order-by-type = true
