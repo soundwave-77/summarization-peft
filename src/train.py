@@ -10,7 +10,7 @@ from transformers import AutoTokenizer
 from trl import SFTConfig, SFTTrainer
 
 from src.adapters.factory import AdapterFactory
-from src.utils import load_config, save_metrics
+from src.utils import check_path_existence, load_config, save_metrics
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -35,10 +35,7 @@ if __name__ == "__main__":
     adapter = adapter_factory.create_adapter(adapter_name)
     experiment_name = f"{model_name}_{adapter_factory.experiment_name()}"
     experiment_dir = os.path.join(artifacts_dir, experiment_name)
-    
-    if os.path.exists(experiment_dir):
-        raise FileExistsError(f"Duplicated experiment name {experiment_dir}")
-    os.makedirs(experiment_dir)
+    check_path_existence(experiment_dir)
     
     logger.info("### ADAPTER CREATED!")
 
