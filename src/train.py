@@ -16,12 +16,13 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 if __name__ == "__main__":
-    load_dotenv("../.env")
+    load_dotenv()
 
     logger.info("### LOAD CONFIGS...")
     
     train_config = load_config("src/configs/train_config.json")
-    model_name = train_config["base_model"]
+    model = train_config["base_model"]
+    model_name = model.split("/")[-1]
     adapter_name = train_config["adapter_name"]
     data_config = train_config["data"]
     train_params = train_config["training_params"]
@@ -61,7 +62,7 @@ if __name__ == "__main__":
 
     logger.info("### DATASETS LOADED!")
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    tokenizer = AutoTokenizer.from_pretrained(model)
     
     def compute_metrics(eval_preds):
         preds, labels = eval_preds
@@ -95,7 +96,7 @@ if __name__ == "__main__":
     logger.info("### INITIALIZE TRAINER...")
     
     trainer = SFTTrainer(
-        model=model_name,
+        model=model,
         peft_config=adapter,
         args=sft_config,
         train_dataset=data["train"],
