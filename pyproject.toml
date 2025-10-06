@@ -1,28 +1,21 @@
-[tool.poetry]
-name = "src"
+[project]
+name = "summarization-peft"
 version = "0.1.0"
-description = "PEFT methods comparison for summarization"
-authors = ["Vladislav <ve.kirienko7@gmail.com>"]
+description = "Add your description here"
 readme = "README.md"
-packages = [{ include = "src" }]
-
-[tool.poetry.dependencies]
-python = "^3.12"
-peft = "^0.15.2"
-pydantic = "^2.11.7"
-ruff = "^0.12.0"
-datasets = "^3.6.0"
-trl = "^0.19.0"
-ipywidgets = "^8.1.7"
-python-dotenv = "^1.1.0"
-evaluate = "^0.4.4"
-absl-py = "^2.3.1"
-nltk = "^3.9.2"
-rouge-score = "^0.1.2"
-bert-score = "^0.3.13"
-clearml = "^2.0.2"
-
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires-python = ">=3.13"
+dependencies = [
+    "absl-py>=2.3.1",
+    "bert-score>=0.3.13",
+    "clearml>=2.0.2",
+    "datasets>=4.1.1",
+    "evaluate>=0.4.6",
+    "ipywidgets>=8.1.7",
+    "nltk>=3.9.2",
+    "peft>=0.17.1",
+    "pydantic>=2.11.10",
+    "python-dotenv>=1.1.1",
+    "rouge-score>=0.1.2",
+    "ruff>=0.13.3",
+    "trl>=0.23.1",
+]

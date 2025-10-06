@@ -96,9 +96,10 @@ if __name__ == "__main__":
         model=model,
         peft_config=adapter,
         args=sft_config,
+        processing_class=tokenizer,
         train_dataset=data["train"],
         eval_dataset=data["validation"],
-        compute_metrics=compute_metrics
+        compute_metrics=compute_metrics,
     )
     
     logger.info("### TRAINER INITIALIZED!")
