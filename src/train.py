@@ -4,6 +4,7 @@ import os
 import evaluate
 import numpy as np
 
+from clearml import Task
 from datasets import load_dataset
 from transformers import AutoTokenizer
 from trl import SFTConfig, SFTTrainer
@@ -16,7 +17,6 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 
 if __name__ == "__main__":
     logger.info("### LOAD CONFIGS...")
-    
     train_config = load_config("src/configs/train_config.json")
     model = train_config["base_model"]
     model_name = model.split("/")[-1]
@@ -24,30 +24,32 @@ if __name__ == "__main__":
     data_config = train_config["data"]
     train_params = train_config["training_params"]
     artifacts_dir = train_config["artifacts_dir"]
-    
     logger.info("### CONFIGS SUCCESSFULLY LOADED!")
 
     logger.info("### CREATE ADAPTER...")
-    
     adapter_factory = AdapterFactory()
     adapter = adapter_factory.create_adapter(adapter_name)
     experiment_name = f"{model_name}_{adapter_factory.experiment_name()}"
     experiment_dir = os.path.join(artifacts_dir, experiment_name)
     check_path_existence(experiment_dir)
-    
     logger.info("### ADAPTER CREATED!")
+    
+    logger.info("### CREATE CLEARML TASK...")
+    task = Task.init(
+        project_name="summarization-peft",
+        task_name=experiment_name,
+        task_type=Task.TaskTypes.training
+    )
+    logger.info("### CLEARML TASK CREATED!")
 
     logger.info("### LOAD METRICS...")
-    
     bleu_metric = evaluate.load("bleu")
     rouge_metric = evaluate.load("rouge")
     meteor_metric = evaluate.load("meteor")
     bertscore = evaluate.load("bertscore")
-    
     logger.info("### METRICS LOADED!")
 
     logger.info("### LOAD DATASETS...")
-
     data = load_dataset(
         "json",
         data_files={
@@ -56,7 +58,6 @@ if __name__ == "__main__":
             "test": data_config["test"]
         }
     )
-
     logger.info("### DATASETS LOADED!")
 
     tokenizer = AutoTokenizer.from_pretrained(model)
@@ -91,7 +92,6 @@ if __name__ == "__main__":
     )
 
     logger.info("### INITIALIZE TRAINER...")
-    
     trainer = SFTTrainer(
         model=model,
         peft_config=adapter,
@@ -101,7 +101,6 @@ if __name__ == "__main__":
         eval_dataset=data["validation"],
         compute_metrics=compute_metrics,
     )
-    
     logger.info("### TRAINER INITIALIZED!")
 
     logger.info("### START TRAINING...")
@@ -112,13 +111,24 @@ if __name__ == "__main__":
     val_metrics = trainer.evaluate()
     logger.info(f"Validation metrics: {val_metrics}")
 
+    task.get_logger().report_scalar("Validation Metrics", "bleu", val_metrics["bleu"])
+    task.get_logger().report_scalar("Validation Metrics", "rouge1", val_metrics["rouge1"])
+    task.get_logger().report_scalar("Validation Metrics", "rouge2", val_metrics["rouge2"])
+    task.get_logger().report_scalar("Validation Metrics", "rougeL", val_metrics["rougeL"])
+    task.get_logger().report_scalar("Validation Metrics", "meteor", val_metrics["meteor"])
+    task.get_logger().report_scalar("Validation Metrics", "bertscore_f1", val_metrics["bertscore_f1"])
+
     logger.info("### EVALUATE ON TEST DATASET...")
     test_metrics = trainer.predict(data["test"]).metrics
     logger.info(f"Test metrics: {test_metrics}")
 
-    logger.info("### SAVE METRICS...")
-    
-    save_metrics(val_metrics, experiment_dir, "validation_metrics.json")
-    save_metrics(test_metrics, experiment_dir, "test_metrics.json")
-    
-    logger.info("### METRICS SAVED SUCCESSFULLY!")
+    for key, value in test_metrics.items():
+        task.get_logger().report_scalar("Test Metrics", key, value)
+
+    val_metrics_path = save_metrics(val_metrics, experiment_dir, "validation_metrics.json")
+    test_metrics_path = save_metrics(test_metrics, experiment_dir, "test_metrics.json")
+
+    task.upload_artifact("validation_metrics", val_metrics_path)
+    task.upload_artifact("test_metrics", test_metrics_path)
+
+    logger.info("### METRICS SAVED AND UPLOADED TO CLEARML SUCCESSFULLY!")

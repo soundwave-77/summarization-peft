@@ -11,7 +11,10 @@ def check_path_existence(path: str) -> None:
         raise FileExistsError(f"Directory `{path}` already exists.")
     os.makedirs(path)
 
-def save_metrics(metrics: dict, metrics_dir: str, filename: str):
+def save_metrics(metrics: dict, metrics_dir: str, filename: str) -> str:
     file_path = os.path.join(metrics_dir, filename)
+
     with open(file_path, "w", encoding="utf-8") as f:
         json.dump(metrics, f, ensure_ascii=False, indent=4)
+    
+    return file_path
