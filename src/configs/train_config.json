@@ -1,11 +1,11 @@
 {
-  "base_model": "Qwen/Qwen3-4B-Instruct-2507",
-  "adapter_name": "LORA",
+  "base_model": "Qwen/Qwen2.5-1.5B-Instruct",
+  "adapter_name": "PROMPT_TUNING",
   "training_params": {
     "max_length": 4096,
-    "per_device_train_batch_size": 2,
-    "per_device_eval_batch_size": 2,
-    "num_train_epochs": 10,
+    "per_device_train_batch_size": 32,
+    "per_device_eval_batch_size": 32,
+    "num_train_epochs": 5,
     "learning_rate": 3e-4,
     "weight_decay": 0.01,
     "fp16": true,
