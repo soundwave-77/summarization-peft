@@ -10,7 +10,7 @@ from transformers import AutoTokenizer
 from trl import SFTConfig, SFTTrainer
 
 from src.adapters.factory import AdapterFactory
-from src.utils import check_path_existence, load_config, save_metrics
+from src.utils import check_path_existence, load_config, save_dict_to_json
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -85,6 +85,20 @@ if __name__ == "__main__":
         }
 
     outputs_dir = os.path.join(experiment_dir, "outputs")
+    
+    num_training_examples = len(data["train"])
+    per_device_train_batch_size = train_params["per_device_train_batch_size"]
+    num_train_epochs = train_params["num_train_epochs"]
+    steps_per_epoch = num_training_examples // per_device_train_batch_size
+    total_steps = steps_per_epoch * num_train_epochs
+    eval_steps = int(total_steps * 0.05)
+    save_steps = eval_steps
+    train_params["eval_steps"] = eval_steps
+    train_params["save_steps"] = save_steps
+    
+    train_params_path = save_dict_to_json(train_params, experiment_dir, "train_params.json")
+    task.upload_artifact("train_params", train_params_path)
+    
     sft_config = SFTConfig(
         run_name=experiment_name,
         output_dir=outputs_dir,
@@ -125,8 +139,8 @@ if __name__ == "__main__":
     for key, value in test_metrics.items():
         task.get_logger().report_scalar("Test Metrics", key, value)
 
-    val_metrics_path = save_metrics(val_metrics, experiment_dir, "validation_metrics.json")
-    test_metrics_path = save_metrics(test_metrics, experiment_dir, "test_metrics.json")
+    val_metrics_path = save_dict_to_json(val_metrics, experiment_dir, "validation_metrics.json")
+    test_metrics_path = save_dict_to_json(test_metrics, experiment_dir, "test_metrics.json")
 
     task.upload_artifact("validation_metrics", val_metrics_path)
     task.upload_artifact("test_metrics", test_metrics_path)

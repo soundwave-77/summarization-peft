@@ -1,5 +1,5 @@
 {
-  "num_virtual_tokens": 8,
+  "num_virtual_tokens": 128,
   "prompt_tuning_init": "RANDOM",
   "prompt_tuning_init_text": null
 }
