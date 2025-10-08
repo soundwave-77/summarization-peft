@@ -6,11 +6,17 @@ import numpy as np
 
 from clearml import Task
 from datasets import load_dataset
-from transformers import AutoTokenizer
-from trl import SFTConfig, SFTTrainer
+from peft import get_peft_model
+from transformers import (
+    AutoModelForSeq2SeqLM,
+    AutoTokenizer,
+    DataCollatorForSeq2Seq,
+    Seq2SeqTrainer,
+    Seq2SeqTrainingArguments,
+)
 
 from src.adapters.factory import AdapterFactory
-from src.utils import check_path_existence, load_config, save_dict_to_json
+from src.utils import check_path_existence, load_config, print_number_of_trainable_model_parameters, save_dict_to_json
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -18,10 +24,9 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 if __name__ == "__main__":
     logger.info("### LOAD CONFIGS...")
     train_config = load_config("src/configs/train_config.json")
-    model = train_config["base_model"]
-    model_name = model.split("/")[-1]
+    model_path = train_config["base_model"]
+    model_name = model_path.split("/")[-1]
     adapter_name = train_config["adapter_name"]
-    data_config = train_config["data"]
     train_params = train_config["training_params"]
     artifacts_dir = train_config["artifacts_dir"]
     logger.info("### CONFIGS SUCCESSFULLY LOADED!")
@@ -33,59 +38,94 @@ if __name__ == "__main__":
     experiment_dir = os.path.join(artifacts_dir, experiment_name)
     check_path_existence(experiment_dir)
     logger.info("### ADAPTER CREATED!")
-    
+
     logger.info("### CREATE CLEARML TASK...")
     task = Task.init(
         project_name="summarization-peft",
         task_name=experiment_name,
-        task_type=Task.TaskTypes.training
+        task_type=Task.TaskTypes.training,
     )
     logger.info("### CLEARML TASK CREATED!")
 
     logger.info("### LOAD METRICS...")
-    bleu_metric = evaluate.load("bleu")
-    rouge_metric = evaluate.load("rouge")
-    meteor_metric = evaluate.load("meteor")
+    bleu = evaluate.load("bleu")
+    rouge = evaluate.load("rouge")
+    meteor = evaluate.load("meteor")
     bertscore = evaluate.load("bertscore")
     logger.info("### METRICS LOADED!")
 
     logger.info("### LOAD DATASETS...")
-    data = load_dataset(
-        "json",
-        data_files={
-            "train": data_config["train"], 
-            "validation": data_config["val"], 
-            "test": data_config["test"]
-        }
-    )
+    data = load_dataset("rcp-meetings/rudialogsum_v2").rename_column("dialog", "text")
+    train_valid = data["train"].train_test_split(test_size=0.2, seed=42, shuffle=True)
+    data["train"] = train_valid["train"]
+    data["validation"] = train_valid["test"]
     logger.info("### DATASETS LOADED!")
 
-    tokenizer = AutoTokenizer.from_pretrained(model)
-    
+    logger.info("### LOAD TOKENIZER AND MODEL...")
+    tokenizer = AutoTokenizer.from_pretrained(model_path)
+    data_collator = DataCollatorForSeq2Seq(tokenizer=tokenizer, model=model_path)
+
+    model = AutoModelForSeq2SeqLM.from_pretrained(model_path)
+    peft_model = get_peft_model(model, adapter)
+    logger.info(f"### {print_number_of_trainable_model_parameters(model)}")
+    logger.info("### MODEL AND TOKENIZER LOADED!")
+
+    prefix = "Суммаризируй следующий диалог и дай краткий ответ на русском языке:\n\n {dialog}"
+
+    def preprocess_function(examples):
+        inputs = [prefix.format(dialog=dialog) for dialog in examples["text"]]
+        model_inputs = tokenizer(inputs, max_length=512, truncation=True)
+
+        labels = tokenizer(text_target=examples["summary"], max_length=512, truncation=True)
+
+        model_inputs["labels"] = labels["input_ids"]
+        return model_inputs
+
+    tokenized_data = data.map(
+        preprocess_function,
+        batched=True,
+        remove_columns=data["train"].column_names,
+    )
+
+    logger.info("### DATA TOKENIZED!")
+
     def compute_metrics(eval_preds):
         preds, labels = eval_preds
-        if isinstance(preds, tuple) or preds.ndim == 2:
-            preds = np.argmax(preds, axis=-1)
-        labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
+
         decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
+        labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
         decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
-        bleu = bleu_metric.compute(predictions=decoded_preds, references=[[ref] for ref in decoded_labels])
-        rouge = rouge_metric.compute(predictions=decoded_preds, references=decoded_labels, use_stemmer=True)
-        meteor = meteor_metric.compute(predictions=decoded_preds, references=decoded_labels)
-        bertscore_metric = float(
-            bertscore.compute(predictions=decoded_preds, references=decoded_labels, lang="ru")["f1"].mean()
+
+        bleu_score = bleu.compute(
+            predictions=decoded_preds,
+            references=[[ref] for ref in decoded_labels],
         )
+        rouge_score = rouge.compute(
+            predictions=decoded_preds,
+            references=decoded_labels,
+            use_stemmer=True,
+        )
+        meteor_score = meteor.compute(
+            predictions=decoded_preds,
+            references=decoded_labels,
+        )
+        bert = bertscore.compute(
+            predictions=decoded_preds,
+            references=decoded_labels,
+            lang="ru",
+        )
+
         return {
-            "bleu": bleu["bleu"],
-            "rouge1": rouge["rouge1"],
-            "rouge2": rouge["rouge2"],
-            "rougeL": rouge["rougeL"],
-            "meteor": meteor["meteor"],
-            "bertscore_f1": bertscore_metric
+            "bleu": bleu_score["bleu"],
+            "rouge1": rouge_score["rouge1"],
+            "rouge2": rouge_score["rouge2"],
+            "rougeL": rouge_score["rougeL"],
+            "meteor": meteor_score["meteor"],
+            "bertscore_f1": float(np.mean(bert["f1"])),
         }
 
     outputs_dir = os.path.join(experiment_dir, "outputs")
-    
+
     num_training_examples = len(data["train"])
     per_device_train_batch_size = train_params["per_device_train_batch_size"]
     num_train_epochs = train_params["num_train_epochs"]
@@ -93,26 +133,24 @@ if __name__ == "__main__":
     total_steps = steps_per_epoch * num_train_epochs
     eval_steps = int(total_steps * 0.05)
     save_steps = eval_steps
+
     train_params["eval_steps"] = eval_steps
     train_params["save_steps"] = save_steps
-    
+    train_params["output_dir"] = outputs_dir
+
     train_params_path = save_dict_to_json(train_params, experiment_dir, "train_params.json")
     task.upload_artifact("train_params", train_params_path)
-    
-    sft_config = SFTConfig(
-        run_name=experiment_name,
-        output_dir=outputs_dir,
-        **train_params
-    )
+
+    training_args = Seq2SeqTrainingArguments(**train_params)
 
     logger.info("### INITIALIZE TRAINER...")
-    trainer = SFTTrainer(
+    trainer = Seq2SeqTrainer(
         model=model,
-        peft_config=adapter,
-        args=sft_config,
+        args=training_args,
+        train_dataset=tokenized_data["train"],
+        eval_dataset=tokenized_data["validation"],
         processing_class=tokenizer,
-        train_dataset=data["train"],
-        eval_dataset=data["validation"],
+        data_collator=data_collator,
         compute_metrics=compute_metrics,
     )
     logger.info("### TRAINER INITIALIZED!")
@@ -125,24 +163,17 @@ if __name__ == "__main__":
     val_metrics = trainer.evaluate()
     logger.info(f"Validation metrics: {val_metrics}")
 
-    task.get_logger().report_scalar("Validation Metrics", "bleu", val_metrics["bleu"])
-    task.get_logger().report_scalar("Validation Metrics", "rouge1", val_metrics["rouge1"])
-    task.get_logger().report_scalar("Validation Metrics", "rouge2", val_metrics["rouge2"])
-    task.get_logger().report_scalar("Validation Metrics", "rougeL", val_metrics["rougeL"])
-    task.get_logger().report_scalar("Validation Metrics", "meteor", val_metrics["meteor"])
-    task.get_logger().report_scalar("Validation Metrics", "bertscore_f1", val_metrics["bertscore_f1"])
+    for k, v in val_metrics.items():
+        task.get_logger().report_scalar("Validation Metrics", k, v)
 
     logger.info("### EVALUATE ON TEST DATASET...")
-    test_metrics = trainer.predict(data["test"]).metrics
+    test_metrics = trainer.predict(tokenized_data["test"]).metrics
     logger.info(f"Test metrics: {test_metrics}")
 
-    for key, value in test_metrics.items():
-        task.get_logger().report_scalar("Test Metrics", key, value)
+    for k, v in test_metrics.items():
+        task.get_logger().report_scalar("Test Metrics", k, v)
 
-    val_metrics_path = save_dict_to_json(val_metrics, experiment_dir, "validation_metrics.json")
-    test_metrics_path = save_dict_to_json(test_metrics, experiment_dir, "test_metrics.json")
-
-    task.upload_artifact("validation_metrics", val_metrics_path)
-    task.upload_artifact("test_metrics", test_metrics_path)
+    save_dict_to_json(val_metrics, experiment_dir, "validation_metrics.json")
+    save_dict_to_json(test_metrics, experiment_dir, "test_metrics.json")
 
     logger.info("### METRICS SAVED AND UPLOADED TO CLEARML SUCCESSFULLY!")
