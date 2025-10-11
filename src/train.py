@@ -17,7 +17,7 @@ from transformers import (
 )
 
 from src.adapters.factory import AdapterFactory
-from src.utils import check_path_existence, load_config, print_number_of_trainable_model_parameters, save_dict_to_json
+from src.utils import check_path_existence, load_config, save_dict_to_json
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -68,7 +68,7 @@ if __name__ == "__main__":
 
     model = AutoModelForSeq2SeqLM.from_pretrained(model_path, dtype=torch.float16)
     peft_model = get_peft_model(model, adapter)
-    logger.info(f"### {print_number_of_trainable_model_parameters(model)}")
+    peft_model.print_trainable_parameters()
     logger.info("### MODEL AND TOKENIZER LOADED!")
 
     prefix = "Суммаризируй следующий диалог и дай краткий ответ на русском языке:\n\n {dialog}"
@@ -158,7 +158,7 @@ if __name__ == "__main__":
 
     logger.info("### INITIALIZE TRAINER...")
     trainer = Seq2SeqTrainer(
-        model=model,
+        model=peft_model,
         args=training_args,
         train_dataset=tokenized_data["train"],
         eval_dataset=tokenized_data["validation"],
