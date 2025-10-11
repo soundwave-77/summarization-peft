@@ -67,7 +67,7 @@ if __name__ == "__main__":
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    model = AutoModelForSeq2SeqLM.from_pretrained(model_path, torch_dtype=torch.float16)
+    model = AutoModelForSeq2SeqLM.from_pretrained(model_path, torch_dtype=torch.bfloat16)
     model = get_peft_model(model, adapter)
     model.print_trainable_parameters()
     
