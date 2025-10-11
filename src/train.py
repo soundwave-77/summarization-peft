@@ -3,6 +3,7 @@ import os
 
 import evaluate
 import numpy as np
+import torch
 
 from clearml import Task
 from datasets import load_dataset
@@ -65,7 +66,7 @@ if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained(model_path)
     data_collator = DataCollatorForSeq2Seq(tokenizer=tokenizer, model=model_path)
 
-    model = AutoModelForSeq2SeqLM.from_pretrained(model_path)
+    model = AutoModelForSeq2SeqLM.from_pretrained(model_path, dtype=torch.float16)
     peft_model = get_peft_model(model, adapter)
     logger.info(f"### {print_number_of_trainable_model_parameters(model)}")
     logger.info("### MODEL AND TOKENIZER LOADED!")
@@ -74,9 +75,21 @@ if __name__ == "__main__":
 
     def preprocess_function(examples):
         inputs = [prefix.format(dialog=dialog) for dialog in examples["text"]]
-        model_inputs = tokenizer(inputs, max_length=512, truncation=True)
+        model_inputs = tokenizer(
+            inputs,
+            truncation=True,
+            padding=True,
+            max_length=512,
+            return_tensors="pt",
+        )
 
-        labels = tokenizer(text_target=examples["summary"], max_length=512, truncation=True)
+        labels = tokenizer(
+            text_target=examples["summary"],
+            truncation=True,
+            padding=True,
+            max_length=512,
+            return_tensors="pt",
+        )
 
         model_inputs["labels"] = labels["input_ids"]
         return model_inputs
