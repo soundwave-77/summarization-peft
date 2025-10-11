@@ -174,15 +174,9 @@ if __name__ == "__main__":
     val_metrics = trainer.evaluate()
     logger.info(f"Validation metrics: {val_metrics}")
 
-    for k, v in val_metrics.items():
-        task.get_logger().report_scalar("Validation Metrics", k, v)
-
     logger.info("### EVALUATE ON TEST DATASET...")
     test_metrics = trainer.predict(tokenized_data["test"]).metrics
     logger.info(f"Test metrics: {test_metrics}")
-
-    for k, v in test_metrics.items():
-        task.get_logger().report_scalar("Test Metrics", k, v)
 
     save_dict_to_json(val_metrics, experiment_dir, "validation_metrics.json")
     save_dict_to_json(test_metrics, experiment_dir, "test_metrics.json")
