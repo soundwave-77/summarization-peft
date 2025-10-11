@@ -13,6 +13,7 @@
     "fp16_full_eval": true,
     "eval_strategy": "steps",
     "save_strategy": "steps",
+    "logging_strategy": "steps",
     "load_best_model_at_end": true,
     "push_to_hub": false,
     "report_to": ["clearml"],

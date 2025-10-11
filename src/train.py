@@ -64,35 +64,34 @@ if __name__ == "__main__":
 
     logger.info("### LOAD TOKENIZER AND MODEL...")
     tokenizer = AutoTokenizer.from_pretrained(model_path)
-    data_collator = DataCollatorForSeq2Seq(tokenizer=tokenizer, model=model_path)
+    if tokenizer.pad_token_id is None:
+        tokenizer.pad_token = tokenizer.eos_token
 
-    model = AutoModelForSeq2SeqLM.from_pretrained(model_path, dtype=torch.float16)
-    peft_model = get_peft_model(model, adapter)
-    peft_model.print_trainable_parameters()
+    model = AutoModelForSeq2SeqLM.from_pretrained(model_path, torch_dtype=torch.float16)
+    model = get_peft_model(model, adapter)
+    model.print_trainable_parameters()
+    
+    data_collator = DataCollatorForSeq2Seq(tokenizer=tokenizer, model=model)
     logger.info("### MODEL AND TOKENIZER LOADED!")
 
     prefix = "Суммаризируй следующий диалог и дай краткий ответ на русском языке:\n\n {dialog}"
 
     def preprocess_function(examples):
         inputs = [prefix.format(dialog=dialog) for dialog in examples["text"]]
-        model_inputs = tokenizer(
+        tokenized_inputs = tokenizer(
             inputs,
             truncation=True,
-            padding=True,
             max_length=512,
-            return_tensors="pt",
         )
 
         labels = tokenizer(
-            text_target=examples["summary"],
+            examples["summary"],
             truncation=True,
-            padding=True,
             max_length=512,
-            return_tensors="pt",
-        )
+        )["input_ids"]
 
-        model_inputs["labels"] = labels["input_ids"]
-        return model_inputs
+        tokenized_inputs["labels"] = labels
+        return tokenized_inputs
 
     tokenized_data = data.map(
         preprocess_function,
@@ -145,10 +144,10 @@ if __name__ == "__main__":
     steps_per_epoch = num_training_examples // per_device_train_batch_size
     total_steps = steps_per_epoch * num_train_epochs
     eval_steps = int(total_steps * 0.05)
-    save_steps = eval_steps
 
     train_params["eval_steps"] = eval_steps
-    train_params["save_steps"] = save_steps
+    train_params["save_steps"] = eval_steps
+    train_params["logging_steps"] = eval_steps
     train_params["output_dir"] = outputs_dir
 
     train_params_path = save_dict_to_json(train_params, experiment_dir, "train_params.json")
@@ -158,11 +157,10 @@ if __name__ == "__main__":
 
     logger.info("### INITIALIZE TRAINER...")
     trainer = Seq2SeqTrainer(
-        model=peft_model,
+        model=model,
         args=training_args,
         train_dataset=tokenized_data["train"],
         eval_dataset=tokenized_data["validation"],
-        processing_class=tokenizer,
         data_collator=data_collator,
         compute_metrics=compute_metrics,
     )
