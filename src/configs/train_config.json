@@ -1,6 +1,6 @@
 {
   "base_model": "google/flan-t5-large",
-  "adapter_name": "PROMPT_TUNING",
+  "adapter_name": "LORA",
   "training_params": {
     "per_device_train_batch_size": 16,
     "per_device_eval_batch_size": 16,
