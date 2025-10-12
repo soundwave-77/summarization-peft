@@ -44,8 +44,8 @@ class PrefixTuningParams(BaseParams):
         default=8,
         description="Number of virtual tokens to prepend to the input sequence",
     )
-    encoder_hidden_size: int = Field(
-        default=128,
+    encoder_hidden_size: int | None = Field(
+        default=None,
         description="The hidden size of the prompt encoder",
     )
     prefix_projection: bool = Field(
