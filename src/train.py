@@ -17,7 +17,7 @@ from transformers import (
 )
 
 from src.adapters.factory import AdapterFactory
-from src.utils import check_path_existence, load_config, save_dict_to_json
+from src.utils import check_path_existence, load_config
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -150,8 +150,7 @@ if __name__ == "__main__":
     train_params["logging_steps"] = eval_steps
     train_params["output_dir"] = outputs_dir
 
-    train_params_path = save_dict_to_json(train_params, experiment_dir, "train_params.json")
-    task.upload_artifact("train_params", train_params_path)
+    task.upload_artifact("train_params", train_params)
 
     training_args = Seq2SeqTrainingArguments(**train_params)
 
@@ -172,13 +171,17 @@ if __name__ == "__main__":
 
     logger.info("### EVALUATE ON VALIDATION DATASET...")
     val_metrics = trainer.evaluate()
+    task.upload_artifact("val_metrics", val_metrics)
     logger.info(f"Validation metrics: {val_metrics}")
 
     logger.info("### EVALUATE ON TEST DATASET...")
     test_metrics = trainer.predict(tokenized_data["test"]).metrics
+    task.upload_artifact("test_metrics", test_metrics)
     logger.info(f"Test metrics: {test_metrics}")
 
-    save_dict_to_json(val_metrics, experiment_dir, "validation_metrics.json")
-    save_dict_to_json(test_metrics, experiment_dir, "test_metrics.json")
-
     logger.info("### METRICS SAVED AND UPLOADED TO CLEARML SUCCESSFULLY!")
+    
+    best_model_path = trainer.state.best_model_checkpoint
+    if best_model_path:
+        task.upload_artifact("best_model_checkpoint", best_model_path)
+        logger.info(f"### BEST MODEL CHECKPOINT UPLOADED TO ClearML: {best_model_path}")
